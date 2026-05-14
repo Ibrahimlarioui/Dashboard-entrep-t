@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Atelier QR</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f5f4f0;
+      --surface: #ffffff;
+      --surface2: #f0efe9;
+      --border: rgba(0,0,0,0.08);
+      --border2: rgba(0,0,0,0.14);
+      --text: #1a1a18;
+      --text2: #6b6b64;
+      --text3: #9e9e96;
+      --blue: #378ADD;
+      --blue-bg: #E6F1FB;
+      --blue-text: #0C447C;
+      --green: #1D9E75;
+      --green-bg: #EAF3DE;
+      --green-text: #27500A;
+      --purple: #7F77DD;
+      --purple-bg: #EEEDFE;
+      --purple-text: #3C3489;
+      --red-bg: #FCEBEB;
+      --red-text: #791F1F;
+      --success-bg: #EAF3DE;
+      --success-text: #27500A;
+      --warn-bg: #FAEEDA;
+      --warn-text: #633806;
+      --danger-bg: #FCEBEB;
+      --danger-text: #791F1F;
+      --radius: 10px;
+      --radius-lg: 14px;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* NAV */
+    nav {
+      background: var(--surface);
+      border-bottom: 0.5px solid var(--border2);
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-brand { font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+    .nav-brand span { color: var(--blue); }
+    .nav-links { display: flex; gap: 4px; }
+    .nav-link {
+      font-size: 13px; padding: 6px 14px; border-radius: var(--radius);
+      color: var(--text2); cursor: pointer; border: none; background: transparent;
+      transition: background 0.15s, color 0.15s;
+    }
+    .nav-link:hover { background: var(--surface2); color: var(--text); }
+    .nav-link.active { background: var(--surface2); color: var(--text); font-weight: 500; }
+    .nav-right { display: flex; align-items: center; gap: 10px; }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .live-label { font-size: 12px; color: var(--green-text); font-weight: 500; }
+    .refresh-btn {
+      font-size: 12px; padding: 5px 12px; border-radius: var(--radius);
+      border: 0.5px solid var(--border2); background: transparent;
+      color: var(--text2); cursor: pointer;
+    }
+    .refresh-btn:hover { background: var(--surface2); }
+
+    /* LAYOUT */
+    .page { display: none; }
+    .page.active { display: block; }
+    main { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+    /* GRID */
+    .grid4 { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 1.25rem; }
+    .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; margin-bottom: 1.25rem; }
+    .grid1 { margin-bottom: 1.25rem; }
+
+    /* METRIC CARD */
+    .metric {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.1rem 1.25rem;
+    }
+    .metric .m-label { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
+    .metric .m-value { font-size: 28px; font-weight: 600; color: var(--text); letter-spacing: -0.02em; }
+    .metric .m-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
+
+    /* CARD */
+    .card {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem;
+    }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.1rem; }
+    .card-title { font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.05em; }
+
+    /* ZONE BARS */
+    .zone-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .zone-row:last-child { margin-bottom: 0; }
+    .zone-lbl { font-size: 13px; font-weight: 600; color: var(--text); width: 38px; flex-shrink: 0; }
+    .bar-track { flex: 1; background: var(--surface2); border-radius: 100px; height: 9px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 100px; transition: width 0.8s cubic-bezier(.4,0,.2,1); }
+    .zone-pct { font-size: 12px; color: var(--text2); width: 40px; text-align: right; flex-shrink: 0; }
+    .zone-qty { font-size: 12px; color: var(--text3); width: 65px; text-align: right; flex-shrink: 0; }
+
+    /* ROTATION */
+    .rot-row { display: flex; justify-content: space-between; align-items: center; padding: 11px 0; border-bottom: 0.5px solid var(--border); }
+    .rot-row:last-child { border-bottom: none; }
+    .rot-zone { font-size: 13px; font-weight: 600; color: var(--text); }
+    .rot-detail { font-size: 12px; color: var(--text3); }
+    .rot-right { display: flex; align-items: center; gap: 10px; }
+    .rot-val { font-size: 13px; font-weight: 600; color: var(--text); }
+    .badge { font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 100px; }
+    .badge-ok   { background: var(--success-bg); color: var(--success-text); }
+    .badge-warn { background: var(--warn-bg);    color: var(--warn-text); }
+    .badge-hi   { background: var(--danger-bg);  color: var(--danger-text); }
+
+    /* CHART */
+    .chart-wrap { position: relative; width: 100%; height: 220px; }
+    .zone-toggles { display: flex; gap: 6px; }
+    .zone-btn {
+      font-size: 12px; font-weight: 600; padding: 4px 13px;
+      border-radius: 100px; border: 1.5px solid transparent;
+      cursor: pointer; background: transparent; transition: opacity 0.15s;
+    }
+    .zone-btn.ts01 { border-color: var(--blue);   color: var(--blue-text); }
+    .zone-btn.ts01.active { background: var(--blue-bg); }
+    .zone-btn.ts02 { border-color: var(--green);  color: var(--green-text); }
+    .zone-btn.ts02.active { background: var(--green-bg); }
+    .zone-btn.ts03 { border-color: var(--purple); color: var(--purple-text); }
+    .zone-btn.ts03.active { background: var(--purple-bg); }
+    .zone-btn:not(.active) { opacity: 0.3; }
+
+    /* HISTORIQUE */
+    .hist-controls { display: flex; gap: 6px; margin-bottom: 14px; }
+    .hist-btn {
+      font-size: 12px; padding: 5px 13px; border-radius: var(--radius);
+      border: 0.5px solid var(--border2); background: transparent;
+      color: var(--text2); cursor: pointer; transition: background 0.15s;
+    }
+    .hist-btn.active { background: var(--surface2); color: var(--text); font-weight: 500; }
+    .hist-metrics { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin-bottom: 1rem; }
+    .hist-metric { background: var(--surface2); border-radius: var(--radius); padding: 10px 14px; }
+    .hist-metric .hm-label { font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+    .hist-metric .hm-value { font-size: 22px; font-weight: 600; color: var(--text); }
+    .hist-metric .hm-delta { font-size: 11px; margin-top: 3px; }
+    .delta-up   { color: var(--green-text); }
+    .delta-down { color: var(--red-text); }
+    .chart-legend { display: flex; gap: 16px; margin-top: 10px; flex-wrap: wrap; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+    .legend-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+
+    /* SCAN TABLE */
+    .scan-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .scan-table th { font-size: 11px; color: var(--text2); font-weight: 600; text-align: left; padding: 0 10px 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .scan-table td { padding: 9px 10px; border-top: 0.5px solid var(--border); color: var(--text); vertical-align: middle; }
+    .scan-table tr:hover td { background: var(--surface2); }
+    .pill { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 100px; }
+    .pill-ts01      { background: var(--blue-bg);   color: var(--blue-text); }
+    .pill-ts02      { background: var(--green-bg);  color: var(--green-text); }
+    .pill-ts03      { background: var(--purple-bg); color: var(--purple-text); }
+    .pill-sortie    { background: var(--red-bg);    color: var(--red-text); }
+    .pill-reception { background: var(--surface2);  color: var(--text2); }
+    .mono { font-family: 'Courier New', monospace; font-size: 12px; }
+
+    /* ERROR */
+    .error-msg { color: var(--red-text); background: var(--red-bg); border-radius: var(--radius); padding: 0.75rem 1rem; font-size: 13px; margin-bottom: 1rem; display: none; }
+
+    /* SCAN PAGE */
+    .scan-outer { max-width: 460px; margin: 3rem auto; }
+    .scan-label { font-size: 13px; color: var(--text2); display: block; margin-bottom: 6px; }
+    .scan-select {
+      font-size: 15px; padding: 10px 14px; width: 100%;
+      border-radius: var(--radius); border: 0.5px solid var(--border2);
+      background: var(--surface); color: var(--text); margin-bottom: 1rem;
+      appearance: none; cursor: pointer;
+    }
+    #reader { width: 100%; border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 1rem; background: var(--surface2); min-height: 260px; }
+    .scan-status {
+      padding: 12px 16px; border-radius: var(--radius);
+      font-size: 14px; font-weight: 500; text-align: center;
+      background: var(--surface2); color: var(--text2);
+      transition: background 0.3s, color 0.3s;
+    }
+    .scan-status.success { background: var(--success-bg); color: var(--success-text); }
+    .scan-status.error   { background: var(--danger-bg);  color: var(--danger-text); }
+    .scan-divider { height: 0.5px; background: var(--border2); margin: 1.5rem 0; }
+    .scan-history-title { font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; }
+    .scan-history-list { list-style: none; }
+    .scan-history-list li {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 0; border-bottom: 0.5px solid var(--border); font-size: 13px;
+    }
+    .scan-history-list li:last-child { border-bottom: none; }
+    .scan-hist-left { display: flex; align-items: center; gap: 10px; }
+    .scan-hist-time { font-size: 11px; color: var(--text3); }
+
+    /* HIST LOADING */
+    .hist-loading { color: var(--text3); font-size: 13px; padding: 2rem 0; text-align: center; }
+    .hist-error { color: var(--red-text); background: var(--red-bg); border-radius: var(--radius); padding: 0.75rem 1rem; font-size: 13px; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">Atelier <span>QR</span></div>
+  <div class="nav-links">
+    <button class="nav-link active" onclick="showPage('dashboard', this)">Dashboard</button>
+    <button class="nav-link" onclick="showPage('historique', this)">Historique</button>
+    <button class="nav-link" onclick="showPage('scanner', this)">Scanner</button>
+  </div>
+  <div class="nav-right">
+    <div class="live-dot"></div>
+    <span class="live-label">En ligne</span>
+    <button class="refresh-btn" onclick="loadAll()">Actualiser</button>
+  </div>
+</nav>
+
+<!-- PAGE DASHBOARD -->
+<div id="page-dashboard" class="page active">
+  <main>
+    <div id="error-msg" class="error-msg"></div>
+
+    <div class="grid4" id="metrics">
+      <div class="metric">
+        <div class="m-label">Palettes en stock</div>
+        <div class="m-value" id="m-stock">—</div>
+        <div class="m-sub">TS01 + TS02 + TS03</div>
+      </div>
+      <div class="metric">
+        <div class="m-label">Occupation TS01</div>
+        <div class="m-value" id="m-ts01">—</div>
+        <div class="m-sub" id="m-ts01-sub">—</div>
+      </div>
+      <div class="metric">
+        <div class="m-label">Occupation TS02</div>
+        <div class="m-value" id="m-ts02">—</div>
+        <div class="m-sub" id="m-ts02-sub">—</div>
+      </div>
+      <div class="metric">
+        <div class="m-label">Occupation TS03</div>
+        <div class="m-value" id="m-ts03">—</div>
+        <div class="m-sub" id="m-ts03-sub">—</div>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Occupation des zones</span></div>
+        <div id="zone-bars"><div style="color:var(--text3);font-size:13px;padding:1rem 0;text-align:center;">Chargement...</div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Rotation des stocks</span></div>
+        <div id="rotations"><div style="color:var(--text3);font-size:13px;padding:1rem 0;text-align:center;">Chargement...</div></div>
+      </div>
+    </div>
+
+    <div class="card grid1">
+      <div class="card-header">
+        <span class="card-title">Évolution des stocks — 7 jours</span>
+        <div class="zone-toggles">
+          <button class="zone-btn ts01 active" data-zone="TS01" onclick="toggleZone(this)">TS01</button>
+          <button class="zone-btn ts02 active" data-zone="TS02" onclick="toggleZone(this)">TS02</button>
+          <button class="zone-btn ts03 active" data-zone="TS03" onclick="toggleZone(this)">TS03</button>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="stockChart" role="img" aria-label="Évolution des stocks TS01, TS02, TS03 sur 7 jours">Graphique de tendance des stocks par zone.</canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-title">Derniers scans</span></div>
+      <table class="scan-table">
+        <thead><tr>
+          <th>Palette</th><th>Emplacement</th><th>Date</th><th>Heure</th>
+        </tr></thead>
+        <tbody id="scan-tbody">
+          <tr><td colspan="4" style="color:var(--text3);font-size:13px;padding:1.5rem;text-align:center;">Chargement...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<!-- PAGE HISTORIQUE -->
+<div id="page-historique" class="page">
+  <main>
+    <div class="card grid1">
+      <div class="card-header">
+        <span class="card-title">Rotation historique</span>
+        <div style="font-size:12px;color:var(--text3);" id="hist-period-label">Chargement...</div>
+      </div>
+
+      <!-- Filtre par zone -->
+      <div style="display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap; align-items:center;">
+        <span style="font-size:12px;color:var(--text2);margin-right:4px;">Zone :</span>
+        <button class="hist-btn active" onclick="setHistZone(this,'all')">Toutes</button>
+        <button class="hist-btn" onclick="setHistZone(this,'TS01')">TS01</button>
+        <button class="hist-btn" onclick="setHistZone(this,'TS02')">TS02</button>
+        <button class="hist-btn" onclick="setHistZone(this,'TS03')">TS03</button>
+      </div>
+
+      <div id="hist-error" style="display:none;" class="hist-error"></div>
+
+      <div class="hist-metrics">
+        <div class="hist-metric">
+          <div class="hm-label">TS01 — rotation moy.</div>
+          <div class="hm-value" id="hm-ts01">—</div>
+          <div class="hm-delta" id="hm-ts01-delta"></div>
+        </div>
+        <div class="hist-metric">
+          <div class="hm-label">TS02 — rotation moy.</div>
+          <div class="hm-value" id="hm-ts02">—</div>
+          <div class="hm-delta" id="hm-ts02-delta"></div>
+        </div>
+        <div class="hist-metric">
+          <div class="hm-label">TS03 — rotation moy.</div>
+          <div class="hm-value" id="hm-ts03">—</div>
+          <div class="hm-delta" id="hm-ts03-delta"></div>
+        </div>
+      </div>
+
+      <div id="hist-loading" class="hist-loading">Chargement des données historiques...</div>
+
+      <div class="chart-wrap" style="height:260px;">
+        <canvas id="histChart" role="img" aria-label="Rotation historique TS01, TS02, TS03">Graphique de rotation historique par zone.</canvas>
+      </div>
+
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div>TS01</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>TS02</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>TS03</div>
+      </div>
+
+      <!-- Tableau détail mensuel -->
+      <div style="margin-top:1.5rem;">
+        <div class="card-title" style="margin-bottom:0.75rem;">Détail par mois</div>
+        <table class="scan-table" id="hist-table">
+          <thead><tr>
+            <th>Mois</th>
+            <th>TS01 — sorties</th>
+            <th>TS01 — rotation</th>
+            <th>TS02 — sorties</th>
+            <th>TS02 — rotation</th>
+            <th>TS03 — sorties</th>
+            <th>TS03 — rotation</th>
+          </tr></thead>
+          <tbody id="hist-tbody">
+            <tr><td colspan="7" style="color:var(--text3);font-size:13px;padding:1.5rem;text-align:center;">Chargement...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- PAGE SCANNER -->
+<div id="page-scanner" class="page">
+  <main>
+    <div class="scan-outer">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Scanner une palette</span></div>
+
+        <label class="scan-label" for="loc">Emplacement de destination</label>
+        <select class="scan-select" id="loc">
+          <option value="RECEPTION">RECEPTION</option>
+          <option value="TS01">TS01</option>
+          <option value="TS02">TS02</option>
+          <option value="TS03">TS03</option>
+          <option value="SORTIE">SORTIE</option>
+        </select>
+
+        <div id="reader"></div>
+        <div class="scan-status" id="scan-status">Prêt pour le scan</div>
+
+        <div class="scan-divider"></div>
+
+        <div class="scan-history-title">Scans de cette session</div>
+        <ul class="scan-history-list" id="scan-session-list">
+          <li style="color:var(--text3);font-size:12px;border-bottom:none;">Aucun scan pour l'instant</li>
+        </ul>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+/* ---- NAVIGATION ---- */
+let scannerStarted = false;
+let html5QrCode = null;
+
+function showPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-link').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  btn.classList.add('active');
+
+  if (name === 'scanner' && !scannerStarted) startScanner();
+  if (name === 'dashboard') loadAll();
+  if (name === 'historique') loadHistorique();
+}
+
+/* ---- SCANNER ---- */
+const sessionScans = [];
+
+function startScanner() {
+  html5QrCode = new Html5Qrcode("reader");
+  html5QrCode.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: { width: 250, height: 250 } },
+    onScanSuccess
+  ).catch(err => {
+    const status = document.getElementById('scan-status');
+    status.className   = 'scan-status error';
+    status.textContent = 'Caméra inaccessible : ' + err;
+  });
+  scannerStarted = true;
+}
+
+function onScanSuccess(decodedText) {
+  const loc    = document.getElementById("loc").value;
+  const status = document.getElementById("scan-status");
+  html5QrCode.pause();
+  status.className   = "scan-status";
+  status.textContent = "Envoi : " + decodedText;
+
+  fetch("/scan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ qr: decodedText, loc: loc })
+  })
+  .then(r => r.json())
+  .then(() => {
+    status.className   = "scan-status success";
+    status.textContent = "✓ Enregistré — " + decodedText + " → " + loc;
+    addSessionScan(decodedText, loc, true);
+    setTimeout(() => {
+      status.className   = "scan-status";
+      status.textContent = "Prêt pour le scan";
+      html5QrCode.resume();
+    }, 2000);
+  })
+  .catch(() => {
+    status.className   = "scan-status error";
+    status.textContent = "Erreur serveur";
+    addSessionScan(decodedText, loc, false);
+    setTimeout(() => html5QrCode.resume(), 2000);
+  });
+}
+
+function addSessionScan(palette, loc, ok) {
+  const now  = new Date();
+  const time = now.toTimeString().slice(0, 5);
+  sessionScans.unshift({ palette, loc, time, ok });
+  renderSessionList();
+}
+
+function renderSessionList() {
+  const el = document.getElementById('scan-session-list');
+  if (sessionScans.length === 0) {
+    el.innerHTML = '<li style="color:var(--text3);font-size:12px;border-bottom:none;">Aucun scan pour l\'instant</li>';
+    return;
+  }
+  el.innerHTML = sessionScans.slice(0, 8).map(s => {
+    const emp = s.loc.toLowerCase();
+    const pillClass = emp === 'sortie'    ? 'pill-sortie'
+                    : emp === 'reception' ? 'pill-reception'
+                    : 'pill-' + emp;
+    const okIcon = s.ok
+      ? '<span style="color:var(--green-text);font-size:12px;">✓</span>'
+      : '<span style="color:var(--red-text);font-size:12px;">✗</span>';
+    return `<li>
+      <div class="scan-hist-left">
+        ${okIcon}
+        <span class="mono">${s.palette}</span>
+        <span class="pill ${pillClass}">${s.loc}</span>
+      </div>
+      <span class="scan-hist-time">${s.time}</span>
+    </li>`;
+  }).join('');
+}
+
+/* ---- DATA ---- */
+const COLORS = {
+  TS01: { line: "#378ADD", fill: "rgba(55,138,221,0.08)" },
+  TS02: { line: "#1D9E75", fill: "rgba(29,158,117,0.08)" },
+  TS03: { line: "#7F77DD", fill: "rgba(127,119,221,0.08)" }
+};
+
+let stockChart = null;
+let allDatasets = [];
+const activeZones = new Set(["TS01", "TS02", "TS03"]);
+
+async function loadAll() {
+  showError(null);
+  const base = window.location.origin;
+  try {
+    const [statsRes, tendanceRes, scansRes] = await Promise.all([
+      fetch(base + "/stats"),
+      fetch(base + "/stats/tendance"),
+      fetch(base + "/stats/scans")
+    ]);
+    const stats    = await statsRes.json();
+    const tendance = await tendanceRes.json();
+    const scans    = await scansRes.json();
+    renderMetrics(stats);
+    renderZoneBars(stats.occupation);
+    renderRotations(stats.rotation);
+    renderStockChart(tendance);
+    renderScans(scans);
+  } catch (e) {
+    showError("Erreur de connexion au serveur : " + e.message);
+    console.error(e);
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById("error-msg");
+  if (msg) { el.textContent = msg; el.style.display = "block"; }
+  else { el.style.display = "none"; }
+}
+
+function renderMetrics(stats) {
+  const occ = {};
+  stats.occupation.forEach(z => occ[z.emplacement] = z);
+  const total = stats.occupation.reduce((s, z) => s + z.quantite, 0);
+  document.getElementById("m-stock").textContent = total.toLocaleString("fr-FR");
+  ["TS01","TS02","TS03"].forEach(z => {
+    const d = occ[z] || { quantite: 0, taux: 0, capacite: 0 };
+    document.getElementById("m-" + z.toLowerCase()).textContent = d.taux.toFixed(1) + "%";
+    document.getElementById("m-" + z.toLowerCase() + "-sub").textContent = d.quantite + " / " + d.capacite + " palettes";
+  });
+}
+
+function renderZoneBars(occupation) {
+  const el = document.getElementById("zone-bars");
+  el.innerHTML = "";
+  occupation.forEach(z => {
+    const c = COLORS[z.emplacement] || { line: "#888" };
+    el.innerHTML += `
+      <div class="zone-row">
+        <span class="zone-lbl">${z.emplacement}</span>
+        <div class="bar-track"><div class="bar-fill" style="width:${z.taux}%;background:${c.line};"></div></div>
+        <span class="zone-pct">${z.taux.toFixed(1)}%</span>
+        <span class="zone-qty">${z.quantite}/${z.capacite}</span>
+      </div>`;
+  });
+}
+
+function renderRotations(rotation) {
+  const el = document.getElementById("rotations");
+  el.innerHTML = "";
+  rotation.forEach(r => {
+    const rot   = r.rotation;
+    const cls   = rot < 0.15 ? "badge-ok"   : rot < 0.25 ? "badge-warn" : "badge-hi";
+    const label = rot < 0.15 ? "lente"       : rot < 0.25 ? "normale"    : "rapide";
+    el.innerHTML += `
+      <div class="rot-row">
+        <div>
+          <div class="rot-zone">${r.emplacement}</div>
+          <div class="rot-detail">${r.nb_sorties} sorties · stock moy. ${r.stock_moyen}</div>
+        </div>
+        <div class="rot-right">
+          <span class="rot-val">${rot.toFixed(3)}</span>
+          <span class="badge ${cls}">${label}</span>
+        </div>
+      </div>`;
+  });
+}
+
+function renderStockChart(tendance) {
+  allDatasets = ["TS01","TS02","TS03"].map(zone => ({
+    id: zone,
+    label: zone,
+    data: tendance[zone] || [],
+    borderColor: COLORS[zone].line,
+    backgroundColor: COLORS[zone].fill,
+    borderWidth: 2,
+    tension: 0.4,
+    pointRadius: 3,
+    fill: true
+  }));
+
+  if (stockChart) stockChart.destroy();
+  stockChart = new Chart(document.getElementById("stockChart"), {
+    type: "line",
+    data: {
+      labels: tendance.labels,
+      datasets: allDatasets.filter(d => activeZones.has(d.id))
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: "rgba(0,0,0,0.05)" }, ticks: { font: { size: 11 }, color: "#9e9e96" } },
+        y: { grid: { color: "rgba(0,0,0,0.05)" }, ticks: { font: { size: 11 }, color: "#9e9e96" } }
+      }
+    }
+  });
+}
+
+function toggleZone(btn) {
+  const zone = btn.dataset.zone;
+  if (activeZones.has(zone)) {
+    if (activeZones.size === 1) return;
+    activeZones.delete(zone);
+    btn.classList.remove("active");
+  } else {
+    activeZones.add(zone);
+    btn.classList.add("active");
+  }
+  if (stockChart) {
+    stockChart.data.datasets = allDatasets.filter(d => activeZones.has(d.id));
+    stockChart.update();
+  }
+}
+
+function renderScans(scans) {
+  const tbody = document.getElementById("scan-tbody");
+  tbody.innerHTML = "";
+  if (!scans || scans.length === 0) {
+    tbody.innerHTML = "<tr><td colspan='4' style='color:var(--text3);font-size:13px;padding:1.5rem;text-align:center;'>Aucun scan enregistré</td></tr>";
+    return;
+  }
+  scans.forEach(s => {
+    const emp = s.emplacement.toLowerCase();
+    const pillClass = emp === "sortie"    ? "pill-sortie"
+                    : emp === "reception" ? "pill-reception"
+                    : `pill-${emp}`;
+    tbody.innerHTML += `
+      <tr>
+        <td class="mono">${s.palette_id}</td>
+        <td><span class="pill ${pillClass}">${s.emplacement}</span></td>
+        <td>${s.date_scan}</td>
+        <td>${s.heure_scan}</td>
+      </tr>`;
+  });
+}
+
+/* ================================================================
+   HISTORIQUE — connecté à l'API réelle /stats/historique
+   ================================================================ */
+let histChart = null;
+let histRawData = null;   // données brutes de l'API
+let currentHistZone = 'all';
+
+async function loadHistorique() {
+  // Réinitialiser l'affichage
+  document.getElementById('hist-loading').style.display = 'block';
+  document.getElementById('hist-error').style.display = 'none';
+  ['ts01','ts02','ts03'].forEach(z => {
+    document.getElementById('hm-' + z).textContent = '—';
+    document.getElementById('hm-' + z + '-delta').textContent = '';
+  });
+
+  try {
+    const res = await fetch(window.location.origin + "/stats/historique");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    histRawData = await res.json();
+    document.getElementById('hist-loading').style.display = 'none';
+    renderHistorique(histRawData, currentHistZone);
+  } catch (e) {
+    document.getElementById('hist-loading').style.display = 'none';
+    const errEl = document.getElementById('hist-error');
+    errEl.textContent = "Impossible de charger l'historique : " + e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+function setHistZone(btn, zone) {
+  document.querySelectorAll('.hist-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentHistZone = zone;
+  if (histRawData) renderHistorique(histRawData, zone);
+}
+
+function renderHistorique(data, zoneFilter) {
+  /* data = { TS01: { mois: [...], rotations: [...], sorties: [...] }, TS02: {...}, TS03: {...} } */
+
+  const ZONES = ['TS01', 'TS02', 'TS03'];
+
+  // Tous les mois communs (union)
+  const allMois = [...new Set(
+    ZONES.flatMap(z => (data[z] && data[z].mois) ? data[z].mois : [])
+  )].sort();
+
+  // Mettre à jour le libellé de période
+  if (allMois.length > 0) {
+    document.getElementById('hist-period-label').textContent =
+      allMois[0] + ' → ' + allMois[allMois.length - 1];
+  } else {
+    document.getElementById('hist-period-label').textContent = 'Aucune donnée';
+  }
+
+  // Calcul des moyennes et deltas par zone
+  ZONES.forEach(zone => {
+    const zd = data[zone];
+    const rotations = (zd && zd.rotations) ? zd.rotations : [];
+    const avg = rotations.length
+      ? (rotations.reduce((a, b) => a + b, 0) / rotations.length).toFixed(4)
+      : '—';
+    document.getElementById('hm-' + zone.toLowerCase()).textContent = avg;
+
+    // Delta = variation entre premier et dernier mois disponible
+    const deltaEl = document.getElementById('hm-' + zone.toLowerCase() + '-delta');
+    if (rotations.length >= 2) {
+      const first = rotations[0];
+      const last  = rotations[rotations.length - 1];
+      if (first !== 0) {
+        const pct = (((last - first) / first) * 100).toFixed(1);
+        const up  = last >= first;
+        deltaEl.textContent  = (up ? '↑ +' : '↓ ') + pct + '%';
+        deltaEl.className    = 'hm-delta ' + (up ? 'delta-up' : 'delta-down');
+      } else {
+        deltaEl.textContent = '';
+      }
+    } else {
+      deltaEl.textContent = '';
+    }
+  });
+
+  // Construire les datasets selon le filtre de zone
+  const zonesToShow = zoneFilter === 'all' ? ZONES : [zoneFilter];
+
+  const datasets = zonesToShow.map(zone => {
+    const zd = data[zone];
+    // Aligner les données sur allMois (0 si mois absent)
+    const vals = allMois.map(m => {
+      if (!zd || !zd.mois) return 0;
+      const idx = zd.mois.indexOf(m);
+      return idx >= 0 ? (zd.rotations[idx] || 0) : 0;
+    });
+    return {
+      label: zone,
+      data: vals,
+      borderColor: COLORS[zone].line,
+      backgroundColor: COLORS[zone].fill,
+      borderWidth: 2,
+      tension: 0.4,
+      pointRadius: 4,
+      fill: true
+    };
+  });
+
+  // Graphique
+  if (histChart) histChart.destroy();
+  histChart = new Chart(document.getElementById("histChart"), {
+    type: "line",
+    data: { labels: allMois, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ctx.dataset.label + ' : ' + ctx.parsed.y.toFixed(4)
+          }
+        }
+      },
+      scales: {
+        x: { grid: { color: "rgba(0,0,0,0.05)" }, ticks: { font: { size: 11 }, color: "#9e9e96" } },
+        y: {
+          grid: { color: "rgba(0,0,0,0.05)" },
+          ticks: { font: { size: 11 }, color: "#9e9e96" },
+          beginAtZero: true
+        }
+      }
+    }
+  });
+
+  // Tableau détail mensuel
+  const tbody = document.getElementById('hist-tbody');
+  if (allMois.length === 0) {
+    tbody.innerHTML = "<tr><td colspan='7' style='color:var(--text3);font-size:13px;padding:1.5rem;text-align:center;'>Aucune donnée historique disponible</td></tr>";
+    return;
+  }
+
+  tbody.innerHTML = allMois.map(mois => {
+    const cells = ZONES.map(zone => {
+      const zd = data[zone];
+      if (!zd || !zd.mois) return '<td>—</td><td>—</td>';
+      const idx = zd.mois.indexOf(mois);
+      if (idx < 0) return '<td>—</td><td>—</td>';
+      const sorties  = zd.sorties  ? zd.sorties[idx]  : '—';
+      const rotation = zd.rotations ? zd.rotations[idx].toFixed(4) : '—';
+      const rot = zd.rotations ? zd.rotations[idx] : 0;
+      const cls = rot < 0.15 ? 'badge-ok' : rot < 0.25 ? 'badge-warn' : 'badge-hi';
+      return `<td>${sorties}</td><td><span class="badge ${cls}">${rotation}</span></td>`;
+    }).join('');
+    return `<tr><td style="font-weight:600;">${mois}</td>${cells}</tr>`;
+  }).join('');
+}
+
+/* ---- INIT ---- */
+loadAll();
+</script>
+</body>
+</html>
